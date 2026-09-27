@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rendez-vous du jour</title>
+<style>
+  :root{
+    --bg:#121316; --surface:#1b1d22; --border:#2c2f37;
+    --text:#eceae4; --muted:#93979f; --accent:#3ddc9a; --accent-ink:#08251a;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex; justify-content:center;
+  }
+  .app{ width:100%; max-width:520px; padding:20px 18px 40px; }
+  header{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:18px; }
+  h1{ font-size:20px; margin:0; }
+  .date{ color:var(--muted); font-size:13px; }
+  .count{
+    color:var(--muted); font-size:13px; margin-bottom:16px;
+  }
+  .list{ display:flex; flex-direction:column; gap:10px; }
+  .item{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:14px 16px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .time{
+    font-size:16px; font-weight:700; min-width:52px;
+  }
+  .info{ flex:1; min-width:0; }
+  .name{ font-size:15px; font-weight:600; }
+  .phone{ color:var(--muted); font-size:13px; }
+  .status{
+    font-size:11px; padding:4px 8px; border-radius:20px; white-space:nowrap;
+  }
+  .status.sent{ background:rgba(61,220,154,.15); color:var(--accent); }
+  .status.pending{ background:transparent; border:1px solid var(--border); color:var(--muted); }
+  .empty{ color:var(--muted); text-align:center; padding:60px 10px; font-size:14px; }
+  .error{ color:#e0645a; text-align:center; padding:40px 10px; font-size:14px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Aujourd'hui</h1>
+    <span class="date" id="date"></span>
+  </header>
+  <p class="count" id="count"></p>
+  <div class="list" id="list"></div>
+</div>
+
+<script>
+document.getElementById("date").textContent = new Date().toLocaleDateString("fr-FR", {
+  weekday: "long", day: "numeric", month: "long"
+});
+
+async function load() {
+  const listEl = document.getElementById("list");
+  const countEl = document.getElementById("count");
+  try {
+    const res = await fetch("/api/bookings/today");
+    const bookings = await res.json();
+
+    countEl.textContent = bookings.length
+      ? `${bookings.length} rendez-vous`
+      : "";
+
+    if (!bookings.length) {
+      listEl.innerHTML = '<p class="empty">Aucun rendez-vous aujourd\'hui.</p>';
+      return;
+    }
+
+    listEl.innerHTML = bookings.map(b => {
+      const time = b.time;
+      const statusClass = b.reminderSent ? "sent" : "pending";
+      const statusLabel = b.reminderSent ? "Rappel envoyé" : "Rappel à venir";
+      return `
+        <div class="item">
+          <div class="time">${time}</div>
+          <div class="info">
+            <div class="name">${escapeHtml(b.name)}</div>
+            <div class="phone">${escapeHtml(b.phone)}</div>
+          </div>
+          <span class="status ${statusClass}">${statusLabel}</span>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    listEl.innerHTML = '<p class="error">Impossible de charger les rendez-vous.</p>';
+  }
+}
+
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
