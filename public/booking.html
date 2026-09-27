@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Réserver un créneau</title>
+<style>
+  :root{
+    --bg:#121316; --surface:#1b1d22; --surface-2:#22252c; --border:#2c2f37;
+    --text:#eceae4; --muted:#93979f; --accent:#3ddc9a; --accent-ink:#08251a; --danger:#e0645a;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;display:flex;justify-content:center;}
+  .app{width:100%;max-width:480px;padding:20px 18px 40px;}
+  header{padding:6px 2px 20px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .biz-name{font-size:22px;font-weight:700;letter-spacing:-0.01em;margin:0 0 4px;}
+  .biz-hours{color:var(--muted);font-size:14px;margin:0;}
+  h2.section-title{font-size:14px;font-weight:600;color:var(--muted);margin:0 0 10px;}
+  .days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:24px;-webkit-overflow-scrolling:touch;}
+  .days::-webkit-scrollbar{display:none;}
+  .day-chip{flex:0 0 auto;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:14px;padding:10px 14px;text-align:center;min-width:64px;cursor:pointer;font-size:13px;}
+  .day-chip .dow{display:block;color:var(--muted);font-size:11px;margin-bottom:2px;}
+  .day-chip.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;}
+  .day-chip.active .dow{color:var(--accent-ink);opacity:.7;}
+  .slots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;}
+  .slot{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 6px;font-size:14px;text-align:center;cursor:pointer;}
+  .slot:active{transform:scale(0.97);}
+  .slot.taken{color:var(--muted);background:transparent;border-style:dashed;text-decoration:line-through;cursor:not-allowed;}
+  .empty-note{color:var(--muted);font-size:14px;padding:20px 4px;text-align:center;}
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:20;opacity:0;pointer-events:none;transition:opacity .18s ease;}
+  .sheet-backdrop.open{opacity:1;pointer-events:auto;}
+  .sheet{width:100%;max-width:480px;background:var(--surface);border:1px solid var(--border);border-bottom:none;border-radius:20px 20px 0 0;padding:22px 20px calc(26px + env(safe-area-inset-bottom,0px));transform:translateY(100%);transition:transform .22s ease;}
+  .sheet-backdrop.open .sheet{transform:translateY(0);}
+  .sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 16px;}
+  .sheet h3{margin:0 0 4px;font-size:17px;}
+  .sheet .sheet-sub{color:var(--muted);font-size:13px;margin:0 0 18px;}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;margin-top:14px;}
+  input[type="text"], input[type="tel"]{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:13px 14px;color:var(--text);font-size:15px;}
+  input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .field-error{color:var(--danger);font-size:12px;margin-top:6px;min-height:14px;}
+  .channel-group{display:flex;gap:8px;}
+  .channel-opt{flex:1;background:var(--surface-2);border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:11px 10px;font-size:14px;cursor:pointer;}
+  .channel-opt.active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700;}
+  .btn{width:100%;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;margin-top:20px;}
+  .btn-primary{background:var(--accent);color:var(--accent-ink);}
+  .btn-primary:disabled{opacity:.5;}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);margin-top:10px;}
+  .confirm-screen{text-align:center;padding:50px 10px 10px;}
+  .confirm-badge{width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 20px;}
+  .confirm-screen h2{font-size:20px;margin:0 0 8px;}
+  .confirm-screen p{color:var(--muted);font-size:14px;margin:0 0 4px;}
+  .confirm-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin:24px 0;text-align:left;}
+  .confirm-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;}
+  .confirm-row:last-child{border-bottom:none;}
+  .confirm-row span:first-child{color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const BUSINESS = {
+  name: "Salon Lumière",
+  hoursLabel: "Lun–Sam · 9h–18h",
+  openDays: [1,2,3,4,5,6],
+  startHour: 9,
+  endHour: 18
+};
+const DOW = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
+const MONTHS = ["jan","fév","mar","avr","mai","juin","juil","août","sep","oct","nov","déc"];
+function pad(n){return n.toString().padStart(2,"0");}
+function dateKey(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+
+function buildDays(){
+  const days=[]; const today=new Date();
+  for(let i=0;i<21 && days.length<10;i++){
+    const d=new Date(today); d.setDate(today.getDate()+i);
+    if(BUSINESS.openDays.includes(d.getDay())) days.push(d);
+  }
+  return days;
+}
+function allSlotsForDay(){
+  const times=[];
+  for(let h=BUSINESS.startHour; h<BUSINESS.endHour; h++) times.push(`${pad(h)}:00`);
+  return times;
+}
+function fmtDayLabel(d){ return { dow: DOW[d.getDay()], num: d.getDate(), mon: MONTHS[d.getMonth()] }; }
+function fmtFullDate(d){ return `${DOW[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; }
+function escapeHtml(str){ const d=document.createElement("div"); d.textContent=str; return d.innerHTML; }
+
+const state = { days: buildDays(), activeDayIndex: 0, taken: [], loading: true, booking: null };
+
+async function loadTakenForActiveDay(){
+  state.loading = true; render();
+  const key = dateKey(state.days[state.activeDayIndex]);
+  try{
+    const res = await fetch(`/api/bookings/day?date=${key}`);
+    const data = await res.json();
+    state.taken = data.taken || [];
+  }catch(e){
+    state.taken = [];
+  }
+  state.loading = false; render();
+}
+
+function render(){
+  const app=document.getElementById("app");
+  if(state.booking){
+    const b = state.booking;
+    app.innerHTML = `
+      <div class="confirm-screen">
+        <div class="confirm-badge">✓</div>
+        <h2>Rendez-vous confirmé</h2>
+        <p>Un rappel sera envoyé 24h avant, par ${b.channel === "email" ? "email" : "SMS"}.</p>
+        <div class="confirm-card">
+          <div class="confirm-row"><span>Entreprise</span><span>${BUSINESS.name}</span></div>
+          <div class="confirm-row"><span>Date</span><span>${b.dateLabel}</span></div>
+          <div class="confirm-row"><span>Heure</span><span>${b.time}</span></div>
+          <div class="confirm-row"><span>Nom</span><span>${escapeHtml(b.name)}</span></div>
+          <div class="confirm-row"><span>Téléphone</span><span>${escapeHtml(b.phone)}</span></div>
+        </div>
+        <button class="btn btn-ghost" id="btn-new">Réserver un autre créneau</button>
+      </div>`;
+    document.getElementById("btn-new").onclick = ()=>{ state.booking=null; loadTakenForActiveDay(); };
+    return;
+  }
+
+  const activeDay = state.days[state.activeDayIndex];
+  const allTimes = allSlotsForDay();
+  const free = allTimes.filter(t=>!state.taken.includes(t));
+
+  app.innerHTML = `
+    <header>
+      <p class="biz-name">${BUSINESS.name}</p>
+      <p class="biz-hours">${BUSINESS.hoursLabel}</p>
+    </header>
+    <h2 class="section-title">Choisir un jour</h2>
+    <div class="days" id="days"></div>
+    <h2 class="section-title">Créneaux disponibles — ${fmtFullDate(activeDay)}</h2>
+    <div class="slots" id="slots"></div>
+    ${(!state.loading && free.length===0) ? '<p class="empty-note">Plus aucun créneau ce jour-là. Essayez un autre jour.</p>' : ''}
+  `;
+
+  const daysEl = document.getElementById("days");
+  state.days.forEach((d,i)=>{
+    const l=fmtDayLabel(d);
+    const chip=document.createElement("div");
+    chip.className="day-chip"+(i===state.activeDayIndex?" active":"");
+    chip.innerHTML=`<span class="dow">${l.dow}</span>${l.num} ${l.mon}`;
+    chip.onclick=()=>{ state.activeDayIndex=i; loadTakenForActiveDay(); };
+    daysEl.appendChild(chip);
+  });
+
+  const slotsEl = document.getElementById("slots");
+  allTimes.forEach(t=>{
+    const taken = state.taken.includes(t);
+    const el=document.createElement("div");
+    el.className="slot"+(taken?" taken":"");
+    el.textContent=t;
+    if(!taken) el.onclick=()=>openSheet(t);
+    slotsEl.appendChild(el);
+  });
+}
+
+function openSheet(time){
+  const activeDay = state.days[state.activeDayIndex];
+  let backdrop = document.getElementById("sheet-backdrop");
+  if(!backdrop){ backdrop=document.createElement("div"); backdrop.id="sheet-backdrop"; backdrop.className="sheet-backdrop"; document.body.appendChild(backdrop); }
+  backdrop.innerHTML = `
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h3>${fmtFullDate(activeDay)} à ${time}</h3>
+      <p class="sheet-sub">Indiquez vos coordonnées pour confirmer.</p>
+      <label for="f-name">Nom</label>
+      <input type="text" id="f-name" placeholder="Votre nom" autocomplete="name">
+      <label for="f-phone">Numéro de téléphone</label>
+      <input type="tel" id="f-phone" placeholder="06 12 34 56 78" autocomplete="tel">
+      <label>Rappel 24h avant, par</label>
+      <div class="channel-group" id="channel-group">
+        <button type="button" class="channel-opt active" data-channel="sms">SMS</button>
+        <button type="button" class="channel-opt" data-channel="email">Email</button>
+      </div>
+      <div id="email-field" style="display:none;">
+        <label for="f-email">Adresse email</label>
+        <input type="text" id="f-email" placeholder="vous@exemple.com" autocomplete="email">
+      </div>
+      <div class="field-error" id="f-error"></div>
+      <button class="btn btn-primary" id="f-submit">Confirmer le rendez-vous</button>
+      <button class="btn btn-ghost" id="f-cancel">Annuler</button>
+    </div>`;
+  requestAnimationFrame(()=>backdrop.classList.add("open"));
+
+  let channel = "sms";
+  const emailField = document.getElementById("email-field");
+  document.querySelectorAll(".channel-opt").forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll(".channel-opt").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active"); channel = btn.dataset.channel;
+      emailField.style.display = channel === "email" ? "block" : "none";
+    };
+  });
+  document.getElementById("f-cancel").onclick = closeSheet;
+  backdrop.onclick = (e)=>{ if(e.target===backdrop) closeSheet(); };
+
+  document.getElementById("f-submit").onclick = async ()=>{
+    const name=document.getElementById("f-name").value.trim();
+    const phone=document.getElementById("f-phone").value.trim();
+    const email=document.getElementById("f-email").value.trim();
+    const err=document.getElementById("f-error");
+    const phoneOk = /^[0-9+ .()-]{8,}$/.test(phone);
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if(!name || !phoneOk || (channel === "email" && !emailOk)){
+      err.textContent = !name ? "Merci d'indiquer votre nom."
+        : !phoneOk ? "Numéro de téléphone invalide."
+        : "Adresse email invalide.";
+      return;
+    }
+    const submitBtn = document.getElementById("f-submit");
+    submitBtn.disabled = true; submitBtn.textContent = "Confirmation…";
+
+    try{
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone, channel, email, date: dateKey(activeDay), time })
+      });
+      if(res.status === 409){
+        err.textContent = "Ce créneau vient d'être pris. Choisissez-en un autre.";
+        submitBtn.disabled = false; submitBtn.textContent = "Confirmer le rendez-vous";
+        closeSheet();
+        await loadTakenForActiveDay();
+        return;
+      }
+      if(!res.ok) throw new Error("Erreur serveur");
+
+      state.booking = { name, phone, email, channel, time, dateLabel: fmtFullDate(activeDay) };
+      closeSheet();
+      render();
+    }catch(e){
+      err.textContent = "Impossible de confirmer pour le moment. Réessayez.";
+      submitBtn.disabled = false; submitBtn.textContent = "Confirmer le rendez-vous";
+    }
+  };
+}
+function closeSheet(){
+  const backdrop = document.getElementById("sheet-backdrop");
+  if(backdrop){ backdrop.classList.remove("open"); setTimeout(()=>backdrop.remove(), 200); }
+}
+
+loadTakenForActiveDay();
+</script>
+</body>
+  </html>
